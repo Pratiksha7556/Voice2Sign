@@ -1,0 +1,80 @@
+<script>
+  const output = document.getElementById("textOutput");
+  const languageSelector = document.getElementById("language");
+  const tokenOutput = document.getElementById("tokenOutput");
+  const avatarBox = document.getElementById("avatarBox");
+
+  function startListening() {
+    const selectedLang = languageSelector.value;
+
+    // Setup recognition object with selected language
+    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = selectedLang;
+    recognition.interimResults = false;
+
+    output.innerText = "Listening... 🎙️";
+    tokenOutput.innerHTML = ""; // clear previous tokens
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      output.innerText = transcript;
+
+      // Tokenize the sentence into words
+      const tokens = transcript.trim().split(" ");
+
+      // Show tokens
+      tokenOutput.innerHTML = "";
+      tokens.forEach(word => {
+        const box = document.createElement("div");
+        box.className = "token";
+        box.innerText = word;
+        tokenOutput.appendChild(box);
+
+        // Call API to get ISL signs for each word
+        fetch(`/api/translate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: word,
+            lang: selectedLang
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          // Display the ISL signs (image/video) corresponding to the word
+          if (data.length > 0) {
+            data.forEach(sign => {
+              const mediaContainer = document.createElement('div');
+              const mediaDescription = document.createElement('p');
+              mediaDescription.innerText = sign.description;
+              mediaContainer.appendChild(mediaDescription);
+
+              if (sign.video_path) {
+                const videoElement = document.createElement('video');
+                videoElement.src = `{{ url_for('static', filename='videos/') }}` + sign.video_path;
+                videoElement.controls = true;
+                mediaContainer.appendChild(videoElement);
+              }
+
+              if (sign.image_path) {
+                const imgElement = document.createElement('img');
+                imgElement.src = `{{ url_for('static', filename='images/') }}` + sign.image_path;
+                imgElement.alt = sign.description;
+                mediaContainer.appendChild(imgElement);
+              }
+
+              avatarBox.appendChild(mediaContainer); // Show the media on the avatar section
+            });
+          }
+        })
+        .catch(error => console.error('Error fetching ISL signs:', error));
+      });
+    };
+
+    recognition.onerror = (event) => {
+      output.innerText = 'Error: ' + event.error;
+    };
+
+    recognition.start();
+  }
+</script>
